@@ -1,7 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type LocalAssetSyncPlugin from "../main";
 import { renderNamingPreview } from "../services/nameAllocator";
-import { IntegratedSettings } from "./types";
+import { AttachmentFolderMode, IntegratedSettings } from "./types";
 
 export class LocalAssetSyncSettingTab extends PluginSettingTab {
 	plugin: LocalAssetSyncPlugin;
@@ -13,6 +13,7 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
+		const settings = this.plugin.pluginData.settings;
 		containerEl.empty();
 
 		this.addHeading(containerEl, "Local assets settings");
@@ -24,83 +25,91 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 			"showRibbonIcon"
 		);
 
+		this.addHeading(containerEl, "Attachment destination");
 		new Setting(containerEl)
-				.setName("Allowed local extensions")
-				.setDesc("Comma-separated extensions for dropped or pasted local files.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.pluginData.settings.allowedLocalExtensions)
-						.onChange(async (value) => {
-						await this.plugin.updateSettings({ allowedLocalExtensions: value });
+			.setName("Attachment folder")
+			.setDesc("Choose exactly where imported files are saved.")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("obsidian-default", "Use Obsidian default")
+					.addOption("same-folder", "Same folder as note")
+					.addOption("vault-root", "Vault root")
+					.addOption("custom", "Custom folder")
+					.setValue(settings.attachmentFolderMode)
+					.onChange(async (value) => {
+						await this.plugin.updateSettings({
+							attachmentFolderMode: value as AttachmentFolderMode,
+						});
 						this.display();
 					})
 			);
 
-		new Setting(containerEl)
-				.setName("Allowed remote extensions")
-				.setDesc("Comma-separated extensions for downloaded remote assets.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.pluginData.settings.allowedRemoteExtensions)
-						.onChange(async (value) => {
-						await this.plugin.updateSettings({ allowedRemoteExtensions: value });
-						this.display();
-					})
+		if (settings.attachmentFolderMode === "custom") {
+			this.addTextSetting(
+				containerEl,
+				"Custom attachment folder",
+				"Vault-relative folder path used only when Attachment folder is set to Custom folder.",
+				"customAttachmentFolder"
 			);
+		}
 
-		new Setting(containerEl)
-				.setName("Unknown extension fallback")
-				.setDesc("Used when extension cannot be inferred. Must be in allowed local extensions.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.pluginData.settings.unknownExtensionFallback)
-						.onChange(async (value) => {
-						await this.plugin.updateSettings({ unknownExtensionFallback: value });
-						this.display();
-					})
-			);
-
-		new Setting(containerEl)
-				.setName("Naming pattern")
-				.setDesc("Use {note} and {n}. Example: {note}-{n}.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.pluginData.settings.namingPattern)
-						.onChange(async (value) => {
-						await this.plugin.updateSettings({ namingPattern: value });
-						this.display();
-					})
-			);
+		this.addHeading(containerEl, "Naming and file types");
+		this.addTextSetting(
+			containerEl,
+			"Allowed local extensions",
+			"Comma-separated extensions for dropped or pasted local files.",
+			"allowedLocalExtensions"
+		);
+		this.addTextSetting(
+			containerEl,
+			"Allowed remote extensions",
+			"Comma-separated extensions for downloaded remote assets.",
+			"allowedRemoteExtensions"
+		);
+		this.addTextSetting(
+			containerEl,
+			"Unknown extension fallback",
+			"Used when extension cannot be inferred. Must be in allowed local extensions.",
+			"unknownExtensionFallback"
+		);
+		this.addTextSetting(
+			containerEl,
+			"Naming pattern",
+			"Use {note} and {n}. Example: {note}-{n}.",
+			"namingPattern"
+		);
 
 		const sampleNote = this.app.workspace.getActiveFile()?.basename ?? "note";
 		containerEl.createEl("p", {
-			text: `Naming preview: ${renderNamingPreview(
-				this.plugin.pluginData.settings.namingPattern,
-				sampleNote
-			)}`,
+			text: `Naming preview: ${renderNamingPreview(settings.namingPattern, sampleNote)}`,
 		});
 
 		this.addToggleSetting(
 			containerEl,
 			"Preserve size/alias",
-			"Preserve size or alias metadata when rewriting links.",
+			"Preserve embed size or link alias metadata when rewriting links.",
 			"preserveSizeOrAlias"
 		);
 
+		this.addHeading(containerEl, "Cache behavior");
+		this.addToggleSetting(
+			containerEl,
+			"Use URL cache",
+			"Enabled: cached files are inserted immediately, then remote content is checked in the background; matching downloads are discarded and changed downloads replace the cached file with a notice. Disabled: every run downloads again even when metadata exists.",
+			"useCache"
+		);
 		this.addToggleSetting(
 			containerEl,
 			"Verify existing by hash",
 			"Reuse cached files only if content hash validation succeeds.",
 			"verifyExistingByHash"
 		);
-
 		this.addToggleSetting(
 			containerEl,
 			"Verify existing by dimensions",
 			"Reuse cached image files only if dimensions match metadata.",
 			"verifyExistingByDimensions"
 		);
-
 		this.addToggleSetting(
 			containerEl,
 			"Hash only when size differs",
@@ -108,25 +117,48 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 			"hashOnlyWhenSizeDiffers"
 		);
 
+		new Setting(containerEl)
+			.setName("Conflict strategy")
+			.setDesc(
+				"Reuse existing performs background validation when cache is enabled. Overwrite never reuses existing files without replacing them. Create new always saves another file."
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("reuse-existing", "Reuse existing")
+					.addOption("overwrite-never", "Overwrite never")
+					.addOption("create-new", "Create new")
+					.setValue(settings.conflictStrategy)
+					.onChange(async (value) => {
+						await this.plugin.updateSettings({
+							conflictStrategy: value as IntegratedSettings["conflictStrategy"],
+						});
+					})
+			);
+
+		this.addHeading(containerEl, "Remote processing");
 		this.addNumberSetting(
 			containerEl,
-			"Max download size (MB)",
-			"Skip remote files larger than this size.",
-			"maxDownloadSizeMB"
+			"Max file size (MB)",
+			"Skip local or remote files larger than this size.",
+			"maxDownloadSizeMB",
+			1,
+			200
 		);
-
 		this.addNumberSetting(
 			containerEl,
 			"Request timeout (ms)",
 			"Timeout for each remote download request.",
-			"requestTimeoutMs"
+			"requestTimeoutMs",
+			1000,
+			120000
 		);
-
 		this.addNumberSetting(
 			containerEl,
 			"Concurrency limit",
-			"Maximum number of concurrent download workers.",
-			"concurrencyLimit"
+			"Maximum number of concurrent download workers per note.",
+			"concurrencyLimit",
+			1,
+			8
 		);
 
 		this.addHeading(containerEl, "File type scope");
@@ -143,46 +175,21 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 			"dryRunPreview"
 		);
 
-			new Setting(containerEl)
-				.setName("Conflict strategy")
-				.setDesc("How to handle links that already exist in cache.")
-				.addDropdown((dropdown) =>
-				dropdown
-					.addOption("reuse-existing", "Reuse existing")
-					.addOption("overwrite-never", "Overwrite never")
-					.addOption("create-new", "Create new")
-					.setValue(this.plugin.pluginData.settings.conflictStrategy)
-					.onChange(async (value) => {
-						await this.plugin.updateSettings({
-							conflictStrategy: value as IntegratedSettings["conflictStrategy"],
-						});
-					})
-			);
+		this.addHeading(containerEl, "Domain filters");
+		this.addTextSetting(
+			containerEl,
+			"Include domains",
+			"Optional comma-separated whitelist. Leave empty to allow all domains.",
+			"includeDomains"
+		);
+		this.addTextSetting(
+			containerEl,
+			"Exclude domains",
+			"Optional comma-separated denylist.",
+			"excludeDomains"
+		);
 
-		new Setting(containerEl)
-				.setName("Include domains")
-				.setDesc("Optional comma-separated whitelist. Leave empty to allow all domains.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.pluginData.settings.includeDomains)
-						.onChange(async (value) => {
-						await this.plugin.updateSettings({ includeDomains: value });
-						this.display();
-					})
-			);
-
-		new Setting(containerEl)
-				.setName("Exclude domains")
-				.setDesc("Optional comma-separated denylist.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.pluginData.settings.excludeDomains)
-						.onChange(async (value) => {
-						await this.plugin.updateSettings({ excludeDomains: value });
-						this.display();
-					})
-			);
-
+		this.addHeading(containerEl, "Maintenance");
 		new Setting(containerEl)
 			.setName("Clear local asset cache")
 			.setDesc("Reset URL-to-file mappings so remote links can be downloaded again.")
@@ -205,22 +212,7 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 				})
 			);
 
-		this.addHeading(containerEl, "Last operation log");
-		const lastRun = this.plugin.pluginData.lastRunLog;
-		if (!lastRun) {
-			containerEl.createEl("p", { text: "No operation has been run yet." });
-		} else {
-			containerEl.createEl("p", {
-				text: `${new Date(lastRun.runAt).toLocaleString()} (${lastRun.mode})`,
-			});
-			containerEl.createEl("p", { text: lastRun.summary });
-			if (lastRun.skippedReasons.length > 0) {
-				this.addHeading(containerEl, "Skipped reasons");
-				for (const reason of lastRun.skippedReasons.slice(0, 20)) {
-					containerEl.createEl("p", { text: `- ${reason}` });
-				}
-			}
-		}
+		this.renderLastRunLog(containerEl);
 	}
 
 	private addHeading(containerEl: HTMLElement, name: string): void {
@@ -245,7 +237,7 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 			);
 	}
 
-	private addNumberSetting(
+	private addTextSetting(
 		containerEl: HTMLElement,
 		name: string,
 		description: string,
@@ -258,9 +250,78 @@ export class LocalAssetSyncSettingTab extends PluginSettingTab {
 				text
 					.setValue(String(this.plugin.pluginData.settings[key]))
 					.onChange(async (value) => {
-						const parsed = Number(value);
-						await this.plugin.updateSettings({ [key]: parsed } as Partial<IntegratedSettings>);
+						await this.plugin.updateSettings({ [key]: value } as Partial<IntegratedSettings>);
 					})
 			);
+	}
+
+	private addNumberSetting(
+		containerEl: HTMLElement,
+		name: string,
+		description: string,
+		key: keyof IntegratedSettings,
+		min: number,
+		max: number
+	): void {
+		new Setting(containerEl)
+			.setName(name)
+			.setDesc(description)
+			.addText((text) => {
+				text.inputEl.type = "number";
+				text.inputEl.min = String(min);
+				text.inputEl.max = String(max);
+				text
+					.setValue(String(this.plugin.pluginData.settings[key]))
+					.onChange(async (value) => {
+						const parsed = Number(value);
+						if (!Number.isFinite(parsed)) {
+							return;
+						}
+						await this.plugin.updateSettings({ [key]: parsed } as Partial<IntegratedSettings>);
+					});
+			});
+	}
+
+	private renderLastRunLog(containerEl: HTMLElement): void {
+		this.addHeading(containerEl, "Last operation log");
+		const lastRun = this.plugin.pluginData.lastRunLog;
+		if (!lastRun) {
+			containerEl.createEl("p", { text: "No operation has been run yet." });
+			return;
+		}
+
+		containerEl.createEl("p", {
+			text: `${new Date(lastRun.runAt).toLocaleString()} (${lastRun.mode})`,
+		});
+		containerEl.createEl("p", { text: lastRun.summary });
+
+		const reportLines = [
+			`${new Date(lastRun.runAt).toISOString()} (${lastRun.mode})`,
+			lastRun.summary,
+			...lastRun.details,
+		];
+		new Setting(containerEl)
+			.setName("Copy operation report")
+			.setDesc("Copy the summary and detailed processing notes.")
+			.addButton((button) =>
+				button.setButtonText("Copy report").onClick(async () => {
+					await navigator.clipboard.writeText(reportLines.join("\n"));
+					new Notice("Operation report copied.");
+				})
+			);
+
+		if (lastRun.skippedReasons.length > 0) {
+			this.addHeading(containerEl, "Skipped reasons");
+			for (const reason of lastRun.skippedReasons.slice(0, 20)) {
+				containerEl.createEl("p", { text: `- ${reason}` });
+			}
+		}
+
+		if (lastRun.details.length > 0) {
+			this.addHeading(containerEl, "Details");
+			for (const detail of lastRun.details.slice(0, 50)) {
+				containerEl.createEl("p", { text: `- ${detail}` });
+			}
+		}
 	}
 }

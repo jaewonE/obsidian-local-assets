@@ -1,7 +1,7 @@
 import { IntegratedSettings, PluginData } from "./types";
 
 export const DEFAULT_ALLOWED_EXTENSIONS =
-	"jpg,jpeg,png,gif,heic,webp,bmp,tiff,svg,pdf,mp4,webm,ogv,mov,mkv,mp3,wav,ogg,m4a";
+	"jpg,jpeg,png,gif,heic,avif,webp,bmp,tif,tiff,svg,pdf,mp4,webm,ogv,mov,mkv,mp3,wav,ogg,m4a";
 
 export const DEFAULT_SETTINGS: IntegratedSettings = {
 	showRibbonIcon: true,
@@ -9,7 +9,10 @@ export const DEFAULT_SETTINGS: IntegratedSettings = {
 	allowedRemoteExtensions: DEFAULT_ALLOWED_EXTENSIONS,
 	unknownExtensionFallback: "png",
 	namingPattern: "{note}-{n}",
+	attachmentFolderMode: "obsidian-default",
+	customAttachmentFolder: "assets",
 	preserveSizeOrAlias: true,
+	useCache: true,
 	verifyExistingByHash: true,
 	verifyExistingByDimensions: true,
 	hashOnlyWhenSizeDiffers: false,

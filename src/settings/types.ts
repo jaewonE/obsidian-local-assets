@@ -1,4 +1,5 @@
 export type ConflictStrategy = "reuse-existing" | "overwrite-never" | "create-new";
+export type AttachmentFolderMode = "obsidian-default" | "same-folder" | "vault-root" | "custom";
 
 export interface IntegratedSettings {
 	showRibbonIcon: boolean;
@@ -6,7 +7,10 @@ export interface IntegratedSettings {
 	allowedRemoteExtensions: string;
 	unknownExtensionFallback: string;
 	namingPattern: string;
+	attachmentFolderMode: AttachmentFolderMode;
+	customAttachmentFolder: string;
 	preserveSizeOrAlias: boolean;
+	useCache: boolean;
 	verifyExistingByHash: boolean;
 	verifyExistingByDimensions: boolean;
 	hashOnlyWhenSizeDiffers: boolean;
@@ -31,6 +35,8 @@ export interface DownloadRegistryEntry {
 	width?: number;
 	height?: number;
 	contentType?: string;
+	etag?: string;
+	lastModified?: string;
 	savedAt: number;
 }
 
@@ -40,6 +46,9 @@ export interface OperationLog {
 	summary: string;
 	skippedReasons: string[];
 	details: string[];
+	failedUrls?: string[];
+	skippedUrls?: string[];
+	changedUrls?: string[];
 }
 
 export interface PluginData {

@@ -33,6 +33,38 @@ export default class LocalAssetSyncPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "download-current-folder-assets",
+			name: "Download assets for current folder",
+			callback: () => {
+				void this.remoteDownloadFeature.processCurrentFolder();
+			},
+		});
+
+		this.addCommand({
+			id: "download-vault-assets",
+			name: "Download assets for all notes",
+			callback: () => {
+				void this.remoteDownloadFeature.processAllMarkdownNotes();
+			},
+		});
+
+		this.addCommand({
+			id: "retry-failed-assets",
+			name: "Retry failed asset downloads",
+			callback: () => {
+				void this.remoteDownloadFeature.retryFailedAssetsForCurrentNote();
+			},
+		});
+
+		this.addCommand({
+			id: "clear-current-note-asset-cache",
+			name: "Clear asset cache for current note",
+			callback: () => {
+				void this.remoteDownloadFeature.clearCacheForCurrentNote();
+			},
+		});
+
+		this.addCommand({
 			id: "clear-asset-cache",
 			name: "Clear asset cache",
 			callback: async () => {

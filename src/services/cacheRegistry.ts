@@ -69,6 +69,8 @@ export async function createRegistryEntry(params: {
 	filePath: string;
 	arrayBuffer: ArrayBuffer;
 	contentType: string | null;
+	etag?: string | null;
+	lastModified?: string | null;
 	settings: IntegratedSettings;
 }): Promise<DownloadRegistryEntry> {
 	const entry: DownloadRegistryEntry = {
@@ -76,6 +78,8 @@ export async function createRegistryEntry(params: {
 		filePath: params.filePath,
 		size: params.arrayBuffer.byteLength,
 		contentType: params.contentType ?? undefined,
+		etag: params.etag ?? undefined,
+		lastModified: params.lastModified ?? undefined,
 		savedAt: Date.now(),
 	};
 
@@ -172,7 +176,7 @@ function guessedMimeFromExtension(extension: string): string {
 	}
 }
 
-async function sha256(buffer: ArrayBuffer): Promise<string> {
+export async function sha256(buffer: ArrayBuffer): Promise<string> {
 	const digest = await crypto.subtle.digest("SHA-256", buffer);
 	const bytes = new Uint8Array(digest);
 	return Array.from(bytes)

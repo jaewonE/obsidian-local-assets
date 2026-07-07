@@ -4,75 +4,62 @@
 
 ![demo](https://github.com/jaewonE/obsidian-local-assets/blob/master/assets/demo.gif?raw=true)
 
-Local assets is an Obsidian plugin that unifies two workflows into one consistent system:
-- Rename and save local files added by drag/drop or paste.
-- Download remote assets (images, PDF, audio, video) in the current note and convert links to local wikilinks.
+Local assets keeps files referenced by your notes inside your Obsidian vault. It handles local drag/drop and paste files, then uses the same naming, destination, extension, and cache rules for manually downloaded remote assets.
 
-It uses one shared naming policy, one attachment-path policy, and one extension policy to prevent conflicts.
+## Features
 
-## Core behavior
+- Save dropped or pasted local files with a shared `{note}-{n}.ext` naming pattern.
+- Download remote images, PDFs, audio, and video from the current note, current folder, or all Markdown notes.
+- Convert Markdown links, Markdown embeds, HTML media tags, raw URLs, and image data URIs into local links.
+- Preserve link aliases and embed size metadata when enabled.
+- Choose one of four attachment destinations: Obsidian default, same folder as note, vault root, or a custom folder.
+- Reuse URL cache entries immediately, then validate remote content in the background and replace changed cached files with a notice.
+- Disable cache entirely when every run should download again.
+- Review skipped, failed, reused, downloaded, and planned items from the settings tab.
 
-- Local drop/paste files are saved with a shared pattern like `{note}-{n}.ext`.
-- Remote links are processed manually through a command or ribbon button.
-- Remote assets are cached by URL and can be reused based on settings.
-- Link rewrites preserve embed size/alias metadata when enabled.
-- Unknown extension fallback is validated against allowed local extensions.
+## Commands and Hotkeys
 
-## Commands
+The plugin does not assign default hotkeys. You can assign shortcuts in Obsidian `Settings -> Hotkeys`.
 
-- `download-current-note-assets`: Download and localize remote assets in the active note.
-- `clear-asset-cache`: Clear cached URL-to-file mappings.
+- `Download assets for current note`: localize external assets in the active note.
+- `Download assets for current folder`: localize external assets in Markdown notes next to the active note.
+- `Download assets for all notes`: localize external assets across the vault.
+- `Retry failed asset downloads`: retry URLs recorded as failed in the last operation for the active note.
+- `Clear asset cache for current note`: remove URL cache entries still referenced by the active note.
+- `Clear asset cache`: remove all URL-to-file mappings.
 
-## Main settings
+## Settings
 
-- `allowedLocalExtensions`: Extensions allowed for local drop/paste.
-- `allowedRemoteExtensions`: Extensions allowed for remote downloads.
-- `unknownExtensionFallback`: Used when extension inference fails. Must be in `allowedLocalExtensions`.
-- `namingPattern`: Filename template with `{note}` and `{n}` tokens.
-- `preserveSizeOrAlias`: Preserve `|width` or alias metadata on rewritten links.
-- `verifyExistingByHash`, `verifyExistingByDimensions`, `hashOnlyWhenSizeDiffers`: Cache reuse verification behavior.
-- `includeImages`, `includePdf`, `includeAudio`, `includeVideo`: Type scope toggles.
-- `dryRunPreview`: Preview rewrite and naming behavior without writing files.
-- `conflictStrategy`: `reuse-existing`, `overwrite-never`, or `create-new`.
-- `includeDomains`, `excludeDomains`: Domain allow/deny filtering for remote downloads.
-- `maxDownloadSizeMB`, `requestTimeoutMs`, `concurrencyLimit`: Download controls.
-
-## Architecture
-
-- `src/main.ts`: Plugin lifecycle, command registration, settings persistence, ribbon setup.
-- `src/features/localDrop.ts`: Handles `editor-drop` and `editor-paste` for local files.
-- `src/features/remoteDownload.ts`: Manual remote asset processing and link rewrites.
-- `src/features/linkRewrite.ts`: External-link parsing and replacement helpers.
-- `src/services/attachmentPath.ts`: Obsidian-native attachment folder resolution.
-- `src/services/nameAllocator.ts`: Shared filename allocation and naming preview.
-- `src/services/extensionPolicy.ts`: Extension parsing, validation, domain and type filtering.
-- `src/services/cacheRegistry.ts`: Cache verification and metadata generation.
-- `src/settings/*`: Types, defaults, and settings tab UI.
+- `Attachment folder`: `Use Obsidian default`, `Same folder as note`, `Vault root`, or `Custom folder`.
+- `Allowed local extensions` and `Allowed remote extensions`: comma-separated extension allowlists.
+- `Unknown extension fallback`: extension used when URL or content headers do not provide one.
+- `Naming pattern`: file name template using `{note}` and `{n}`.
+- `Use URL cache`: when enabled, cached files are inserted immediately and remote content is checked in the background; when disabled, metadata is ignored and the plugin downloads again.
+- `Conflict strategy`: reuse existing cache with background validation, never overwrite existing cached files, or always create a new file.
+- `Verify existing by hash`, `Verify existing by dimensions`, `Hash only when size differs`: local cache validation controls.
+- `Max file size`, `Request timeout`, `Concurrency limit`: processing limits.
+- `Include images`, `Include PDFs`, `Include audio`, `Include video`: asset type scope.
+- `Dry-run preview`: plan downloads and link rewrites without writing files.
+- `Include domains` and `Exclude domains`: optional domain filters.
 
 ## Development
 
 - Install dependencies: `npm install`
-- Watch mode: `npm run dev`
-- Production build: `npm run build`
 - Lint: `npm run lint`
+- Test: `npm test`
+- Production build: `npm run build`
 
-## Manual test checklist
-
-- Drop and paste local files with mixed allowed/disallowed extensions.
-- Run remote download command on notes containing image/PDF/audio/video links.
-- Confirm naming sequence is shared across local and remote workflows.
-- Confirm unknown-extension URLs use fallback extension.
-- Toggle dry-run and verify no files are written in dry-run mode.
-
-## Release artifacts
+## Manual Installation
 
 Copy these files into your vault plugin folder:
+
 - `main.js`
 - `manifest.json`
+- `styles.css`
 
-## Privacy and network access
+## Privacy and Network Access
 
-Local assets runs inside your Obsidian vault. It only makes network requests when you manually run the remote asset download command or click the ribbon button. It does not include telemetry and does not read files outside the vault.
+Local assets runs inside your Obsidian vault. It makes network requests only after you manually run a remote asset command or use the ribbon button; cache background validation is part of that manual processing flow. The plugin does not include telemetry and does not read files outside the vault.
 
 ## License
 

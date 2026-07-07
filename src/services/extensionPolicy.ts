@@ -9,6 +9,9 @@ const CONTENT_TYPE_TO_EXTENSION: Record<string, string> = {
 	"image/png": "png",
 	"image/gif": "gif",
 	"image/webp": "webp",
+	"image/avif": "avif",
+	"image/heic": "heic",
+	"image/heif": "heic",
 	"image/svg+xml": "svg",
 	"image/bmp": "bmp",
 	"image/tiff": "tiff",
@@ -32,6 +35,8 @@ const IMAGE_EXTENSIONS = new Set([
 	"png",
 	"gif",
 	"heic",
+	"heif",
+	"avif",
 	"webp",
 	"bmp",
 	"tif",
@@ -238,6 +243,18 @@ export function sanitizeSettings(input: IntegratedSettings): SettingsSanitizeRes
 		sanitized.conflictStrategy = DEFAULT_SETTINGS.conflictStrategy;
 	}
 
+	if (!isAttachmentFolderMode(sanitized.attachmentFolderMode)) {
+		sanitized.attachmentFolderMode = DEFAULT_SETTINGS.attachmentFolderMode;
+	}
+	sanitized.customAttachmentFolder = sanitizeVaultFolder(sanitized.customAttachmentFolder);
+	if (
+		sanitized.attachmentFolderMode === "custom" &&
+		sanitized.customAttachmentFolder.length === 0
+	) {
+		sanitized.customAttachmentFolder = DEFAULT_SETTINGS.customAttachmentFolder;
+		warnings.push("Custom attachment folder was empty and reset to default.");
+	}
+
 	return { settings: sanitized, warnings };
 }
 
@@ -259,4 +276,24 @@ function isConflictStrategy(
 	value: IntegratedSettings["conflictStrategy"]
 ): value is IntegratedSettings["conflictStrategy"] {
 	return value === "reuse-existing" || value === "overwrite-never" || value === "create-new";
+}
+
+function isAttachmentFolderMode(
+	value: IntegratedSettings["attachmentFolderMode"]
+): value is IntegratedSettings["attachmentFolderMode"] {
+	return (
+		value === "obsidian-default" ||
+		value === "same-folder" ||
+		value === "vault-root" ||
+		value === "custom"
+	);
+}
+
+function sanitizeVaultFolder(folderPath: string): string {
+	return folderPath
+		.trim()
+		.replace(/\\/g, "/")
+		.replace(/^\/+/, "")
+		.replace(/\/+$/, "")
+		.replace(/\/{2,}/g, "/");
 }

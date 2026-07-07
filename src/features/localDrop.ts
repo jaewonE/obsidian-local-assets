@@ -50,6 +50,9 @@ async function handleLocalFileInput(
 		return;
 	}
 
+	event.preventDefault();
+	event.stopPropagation();
+
 	const settings = plugin.pluginData.settings;
 	const allowedLocal = extensionSet(settings.allowedLocalExtensions);
 	if (allowedLocal.size === 0) {
@@ -57,35 +60,55 @@ async function handleLocalFileInput(
 		return;
 	}
 
-	const planned = files
-		.map((file) => {
-			const fromName = inferExtensionFromFilename(file.name);
-			const resolvedExtension = normalizeExtension(fromName ?? settings.unknownExtensionFallback);
-			if (!resolvedExtension) {
-				return { file, extension: "", reason: "missing extension" };
-			}
-			if (!allowedLocal.has(resolvedExtension)) {
-				return { file, extension: resolvedExtension, reason: "disallowed extension" };
-			}
-			if (!isCategoryEnabled(resolvedExtension, settings)) {
-				return { file, extension: resolvedExtension, reason: "category disabled" };
-			}
-			return { file, extension: resolvedExtension, reason: "" };
-		})
-		.filter((item) => item.reason === "");
+	const maxBytes = settings.maxDownloadSizeMB * 1024 * 1024;
+	const planned: Array<{ file: File; extension: string }> = [];
+	const skippedReasons: string[] = [];
+
+	for (const file of files) {
+		const fromName = inferExtensionFromFilename(file.name);
+		const resolvedExtension = normalizeExtension(fromName ?? settings.unknownExtensionFallback);
+		if (!resolvedExtension) {
+			skippedReasons.push(`Skipped local file '${file.name}' (missing extension).`);
+			continue;
+		}
+		if (!allowedLocal.has(resolvedExtension)) {
+			skippedReasons.push(
+				`Skipped local file '${file.name}' (disallowed extension '${resolvedExtension}').`
+			);
+			continue;
+		}
+		if (!isCategoryEnabled(resolvedExtension, settings)) {
+			skippedReasons.push(`Skipped local file '${file.name}' (asset type disabled).`);
+			continue;
+		}
+		if (file.size > maxBytes) {
+			skippedReasons.push(`Skipped local file '${file.name}' (over size limit).`);
+			continue;
+		}
+		planned.push({ file, extension: resolvedExtension });
+	}
 
 	if (planned.length === 0) {
+		new Notice(`No local files were imported. Skipped: ${skippedReasons.length}`);
+		plugin.pluginData.lastRunLog = {
+			runAt: Date.now(),
+			mode: "execute",
+			summary: `Local file import complete. Created: 0, Skipped: ${skippedReasons.length}, Failed: 0`,
+			skippedReasons: skippedReasons.slice(0, 50),
+			details: skippedReasons.slice(0, 200),
+			skippedUrls: [],
+			failedUrls: [],
+		};
+		await plugin.savePluginData();
 		return;
 	}
 
-	event.preventDefault();
-	event.stopPropagation();
-
-	const attachmentFolderPath = await resolveAttachmentFolderPath(plugin.app, activeFile);
+	const attachmentFolderPath = await resolveAttachmentFolderPath(plugin.app, activeFile, settings);
 	const reservedStems = collectUsedStemsInFolder(plugin.app, attachmentFolderPath);
 	const createdLinks: string[] = [];
 	let createdCount = 0;
 	let failedCount = 0;
+	const details: string[] = [...skippedReasons];
 
 	for (const item of planned) {
 		try {
@@ -99,8 +122,10 @@ async function handleLocalFileInput(
 			});
 			createdLinks.push(plugin.app.fileManager.generateMarkdownLink(createdFile, activeFile.path));
 			createdCount++;
+			details.push(`Imported local file '${item.file.name}' -> ${createdFile.path}`);
 		} catch (error) {
 			console.error("Local assets: failed to process local file", error);
+			details.push(`Failed local file '${item.file.name}': ${String(error)}`);
 			failedCount++;
 		}
 	}
@@ -110,8 +135,21 @@ async function handleLocalFileInput(
 	}
 
 	if (createdCount > 0 || failedCount > 0) {
-		new Notice(`Local files processed. Created: ${createdCount}, Failed: ${failedCount}`);
+		new Notice(
+			`Local files processed. Created: ${createdCount}, Skipped: ${skippedReasons.length}, Failed: ${failedCount}`
+		);
 	}
+
+	plugin.pluginData.lastRunLog = {
+		runAt: Date.now(),
+		mode: "execute",
+		summary: `Local file import complete. Created: ${createdCount}, Skipped: ${skippedReasons.length}, Failed: ${failedCount}`,
+		skippedReasons: skippedReasons.slice(0, 50),
+		details: details.slice(0, 200),
+		skippedUrls: [],
+		failedUrls: [],
+	};
+	await plugin.savePluginData();
 }
 
 function getActiveFile(info: MarkdownView | MarkdownFileInfo): TFile | null {
