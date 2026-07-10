@@ -1,5 +1,5 @@
 export type ExternalLinkKind = "embed" | "link" | "html-media" | "raw";
-export type ExternalLinkSource = "remote" | "data-uri";
+export type ExternalLinkSource = "remote" | "data-uri" | "local-file";
 
 export interface ExternalLinkMatch {
 	kind: ExternalLinkKind;
@@ -318,8 +318,12 @@ function parseMarkdownDestination(rawDestination: string): string | null {
 		}
 	}
 
-	const match = trimmed.match(/^(data:[^\s]+|https?:\/\/\S+)/i);
-	return match?.[1] ?? null;
+	const match = trimmed.match(/^(data:[^\s]+|https?:\/\/\S+|app:\/\/\S+)/i);
+	if (match?.[1]) {
+		return match[1];
+	}
+
+	return trimmed.startsWith("/") ? trimmed : null;
 }
 
 function ensureEmbedLink(generatedMarkdownLink: string, sizeOrAlias: string): string {
@@ -343,11 +347,14 @@ function ensureEmbedLink(generatedMarkdownLink: string, sizeOrAlias: string): st
 }
 
 function isSupportedSource(url: string): boolean {
-	return /^https?:\/\//i.test(url) || /^data:/i.test(url);
+	return /^https?:\/\//i.test(url) || /^data:/i.test(url) || /^app:\/\//i.test(url) || url.startsWith("/");
 }
 
 function sourceForUrl(url: string): ExternalLinkSource {
-	return /^data:/i.test(url) ? "data-uri" : "remote";
+	if (/^data:/i.test(url)) {
+		return "data-uri";
+	}
+	return /^https?:\/\//i.test(url) ? "remote" : "local-file";
 }
 
 function trimTrailingUrlPunctuation(url: string): string {

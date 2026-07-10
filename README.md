@@ -4,12 +4,13 @@
 
 ![demo](https://github.com/jaewonE/obsidian-local-assets/blob/master/assets/demo.gif?raw=true)
 
-Local assets keeps files referenced by your notes inside your Obsidian vault. It handles local drag/drop and paste files, then uses the same naming, destination, extension, and cache rules for manually downloaded remote assets.
+Local assets keeps files referenced by your notes inside your Obsidian vault. It handles local drag/drop and paste files, then uses the same naming, destination, and extension rules for manually imported local-file references and downloaded remote assets.
 
 ## Features
 
 - Save dropped or pasted local files with a shared `{note}-{n}.ext` naming pattern.
 - Download remote images, PDFs, audio, and video from the current note, current folder, or all Markdown notes.
+- Convert Markdown links and embeds that use absolute local paths, escaped local paths, or Obsidian `app://` file paths into local links.
 - Convert Markdown links, Markdown embeds, HTML media tags, raw URLs, and image data URIs into local links.
 - Preserve link aliases and embed size metadata when enabled.
 - Choose one of four attachment destinations: Obsidian default, same folder as note, vault root, or a custom folder.
@@ -59,7 +60,7 @@ Copy these files into your vault plugin folder:
 
 ## Privacy and Network Access
 
-Local assets runs inside your Obsidian vault. It makes network requests only after you manually run a remote asset command or use the ribbon button; cache background validation is part of that manual processing flow. The plugin does not include telemetry and does not read files outside the vault.
+Local assets runs inside your Obsidian vault. When you manually run an asset command, it can read the absolute local file paths explicitly referenced by that note and copy supported files into the vault; this is available in the desktop app. It makes network requests only for remote sources in that same manual processing flow, and cache background validation is part of remote processing. The plugin does not include telemetry.
 
 ## License
 

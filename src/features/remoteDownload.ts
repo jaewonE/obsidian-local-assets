@@ -16,6 +16,7 @@ import {
 	detectAssetCategory,
 	extensionSet,
 	inferExtensionFromContentType,
+	inferExtensionFromFilename,
 	inferExtensionFromUrl,
 	isCategoryEnabled,
 	isDomainAllowed,
@@ -25,6 +26,7 @@ import {
 	allocateUniqueAssetPath,
 	collectUsedStemsInFolder,
 } from "../services/nameAllocator";
+import { parseLocalFileSource } from "../services/localFileSource";
 import {
 	applyReplacements,
 	buildDryRunMarkdownLink,
@@ -75,6 +77,11 @@ interface RemoteFetchFailure {
 }
 
 type RemoteFetchResult = RemoteFetchSuccess | RemoteFetchFailure;
+
+interface LocalFileSystem {
+	readFile(path: string): Promise<Uint8Array>;
+	stat(path: string): Promise<{ isFile(): boolean; size: number }>;
+}
 
 export class RemoteDownloadFeature {
 	private plugin: LocalAssetSyncPlugin;
@@ -316,6 +323,9 @@ export class RemoteDownloadFeature {
 		if (link.source === "data-uri") {
 			return this.processDataUriLink(params);
 		}
+		if (link.source === "local-file") {
+			return this.processLocalFileLink(params);
+		}
 
 		if (!isDomainAllowed(link.url, settings.includeDomains, settings.excludeDomains)) {
 			return {
@@ -405,6 +415,64 @@ export class RemoteDownloadFeature {
 		}
 	}
 
+	private async processLocalFileLink(params: {
+		link: ExternalLinkMatch;
+		activeFile: TFile;
+		attachmentFolderPath: string;
+		remoteAllowed: Set<string>;
+		reservedStems: Set<string>;
+		registryUpdates: Record<string, DownloadRegistryEntry>;
+	}): Promise<LinkProcessResult> {
+		const sourcePath = parseLocalFileSource(params.link.url);
+		if (!sourcePath) {
+			return { status: "skipped", url: params.link.url, detail: `Skipped (invalid local file path): ${params.link.url}` };
+		}
+		const fileSystem = getLocalFileSystem();
+		if (!fileSystem) {
+			return { status: "skipped", url: params.link.url, detail: "Skipped (local file import is available in the desktop app only)." };
+		}
+
+		const extension = normalizeExtension(
+			inferExtensionFromFilename(sourcePath) ?? this.plugin.pluginData.settings.unknownExtensionFallback
+		);
+		const validationError = this.validateResolvedExtension(extension, params.remoteAllowed, sourcePath);
+		if (validationError) {
+			return { status: "skipped", url: params.link.url, detail: validationError };
+		}
+
+		if (this.plugin.pluginData.settings.dryRunPreview) {
+			return this.planDryRunDownload(params);
+		}
+
+		try {
+			const metadata = await fileSystem.stat(sourcePath);
+			const maxBytes = this.plugin.pluginData.settings.maxDownloadSizeMB * 1024 * 1024;
+			if (!metadata.isFile()) {
+				return { status: "skipped", url: params.link.url, detail: `Skipped (not a file): ${sourcePath}` };
+			}
+			if (metadata.size > maxBytes) {
+				return { status: "skipped", url: params.link.url, detail: `Skipped (over size limit): ${sourcePath}` };
+			}
+			const data = await fileSystem.readFile(sourcePath);
+			const createdFile = await createBinaryWithAllocatedName(this.plugin, {
+				activeFile: params.activeFile,
+				attachmentFolderPath: params.attachmentFolderPath,
+				reservedStems: params.reservedStems,
+				extension,
+				arrayBuffer: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+			});
+			return {
+				status: "downloaded",
+				url: params.link.url,
+				detail: `Imported local file: ${sourcePath} -> ${createdFile.path}`,
+				replacement: this.createReplacement(params.link, createdFile, params.activeFile),
+			};
+		} catch (error) {
+			console.error("Local assets: failed to import local file", error);
+			return { status: "failed", url: params.link.url, detail: `Failed (local file read error): ${sourcePath}` };
+		}
+	}
+
 	private async processDataUriLink(params: {
 		link: ExternalLinkMatch;
 		activeFile: TFile;
@@ -488,7 +556,11 @@ export class RemoteDownloadFeature {
 		reservedStems: Set<string>;
 	}): LinkProcessResult {
 		const settings = this.plugin.pluginData.settings;
-		const urlExtension = params.link.source === "remote" ? inferExtensionFromUrl(params.link.url) : null;
+		const urlExtension = params.link.source === "data-uri"
+			? null
+			: params.link.source === "local-file"
+				? inferExtensionFromFilename(parseLocalFileSource(params.link.url) ?? "")
+				: inferExtensionFromUrl(params.link.url);
 		const simulatedExtension = normalizeExtension(
 			urlExtension ?? settings.unknownExtensionFallback
 		);
@@ -916,6 +988,14 @@ function arrayBuffersEqual(left: ArrayBuffer, right: ArrayBuffer): boolean {
 
 function uniqueValues(values: string[]): string[] {
 	return Array.from(new Set(values));
+}
+
+function getLocalFileSystem(): LocalFileSystem | null {
+	const requireFunction = (window as Window & { require?: (moduleName: string) => unknown }).require;
+	if (!requireFunction) {
+		return null;
+	}
+	return requireFunction("fs/promises") as LocalFileSystem;
 }
 
 function sleep(ms: number): Promise<void> {

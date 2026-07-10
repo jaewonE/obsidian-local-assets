@@ -7,6 +7,7 @@ import {
 } from "../src/features/linkRewrite";
 import { DEFAULT_SETTINGS } from "../src/settings/defaults";
 import { sanitizeSettings } from "../src/services/extensionPolicy";
+import { parseLocalFileSource } from "../src/services/localFileSource";
 
 test("extractExternalLinks handles markdown, html media, raw URLs, and data URIs", () => {
 	const content = [
@@ -71,4 +72,24 @@ test("sanitizeSettings preserves the default attachment mode and repairs custom 
 		customAttachmentFolder: "/Assets//Imported/",
 	});
 	assert.equal(customResult.settings.customAttachmentFolder, "Assets/Imported");
+});
+
+test("extractExternalLinks recognizes absolute and Obsidian app local file sources", () => {
+	const content = [
+		"![](/Users/jaewone/Downloads/Kafka Producer-1.png)",
+		"![](/Users/jaewone/Library/Mobile\\ Documents/iCloud\\~md\\~obsidian/Documents/JaewonE/00.Assets/Kafka\\ Producer-1.png)",
+		"![](app://23874f0dfb64db9d6e44685b6a028c8c7ff6/Users/jaewone/Library/Mobile%20Documents/iCloud~md~obsidian/Documents/JaewonE/00.Assets/Kafka%20Producer-1.png?1783049791373)",
+	].join("\n");
+
+	const matches = extractExternalLinks(content);
+	assert.deepEqual(matches.map((match) => match.source), ["local-file", "local-file", "local-file"]);
+	assert.equal(parseLocalFileSource(matches[0]?.url ?? ""), "/Users/jaewone/Downloads/Kafka Producer-1.png");
+	assert.equal(
+		parseLocalFileSource(matches[1]?.url ?? ""),
+		"/Users/jaewone/Library/Mobile Documents/iCloud~md~obsidian/Documents/JaewonE/00.Assets/Kafka Producer-1.png"
+	);
+	assert.equal(
+		parseLocalFileSource(matches[2]?.url ?? ""),
+		"/Users/jaewone/Library/Mobile Documents/iCloud~md~obsidian/Documents/JaewonE/00.Assets/Kafka Producer-1.png"
+	);
 });

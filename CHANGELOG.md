@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+
+- Added manual import support for Markdown local-file embeds and links using absolute paths, escaped paths, and Obsidian `app://` file paths.
+- Applied the existing attachment destination, naming, allowed type, and size-limit rules when importing supported local files into the vault.
+- Documented the explicit local-path access used by the desktop import workflow in English and Korean.
+
 ## 1.2.0
 
 - Added configurable attachment destinations: Obsidian default, same folder as note, vault root, and custom folder.
